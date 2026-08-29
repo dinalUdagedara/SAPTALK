@@ -20,3 +20,4 @@ dist/
 # Do not broaden the .env rules above to `.env*`, which swallows these.
 !.env.example
 !**/*.env.local.example
+.env*
