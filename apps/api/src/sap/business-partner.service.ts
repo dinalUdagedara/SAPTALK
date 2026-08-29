@@ -4,8 +4,10 @@ import {
   getEntity,
   type BusinessPartner,
   type QueryEnvelope,
+  type ResolvedQueryIntent,
 } from '@saptalk/shared';
-import { SapService } from './sap.service';
+import { SapService, type ODataParams } from './sap.service';
+import { compileIntent } from './intent-compiler';
 import { parseEdmDate, str, unwrapCollection } from './odata-v2';
 
 const ENTITY = 'BusinessPartner' as const;
@@ -17,28 +19,45 @@ export class BusinessPartnerService {
   constructor(private readonly sap: SapService) {}
 
   /**
-   * Milestone 1: an unfiltered read of the first page of business partners.
+   * Unfiltered read of the first page, used by the milestone-1 button.
    *
-   * `$select` is pinned to the fields we actually render — the full entity is
-   * ~90 columns and makes the raw-JSON panel unreadable.
+   * Projects every registry field so the normalised row is fully populated.
    */
   async list(top: number = DEFAULT_TOP): Promise<QueryEnvelope<BusinessPartner>> {
-    const safeTop = clamp(top, 1, MAX_TOP);
-
-    // Every registry field, so the normalised row is fully populated. Once
-    // intents drive the query, the projection comes from the intent instead.
-    const { url, durationMs, payload } = await this.sap.get(getEntity(ENTITY).entitySet, {
-      $top: safeTop,
+    return this.run(getEntity(ENTITY).entitySet, {
+      $top: clamp(top, 1, MAX_TOP),
       $select: fieldNames(ENTITY).join(','),
     });
+  }
 
-    const rows = unwrapCollection<Record<string, unknown>>(payload);
-    const data = rows.map(toBusinessPartner);
+  /**
+   * Run a validated intent.
+   *
+   * The intent has already cleared the field allowlist, so this method's only
+   * job is to compile and execute. Nothing here re-checks permission -- that
+   * decision was made before we got the intent.
+   */
+  async query(intent: ResolvedQueryIntent): Promise<QueryEnvelope<BusinessPartner>> {
+    const { entitySet, params } = compileIntent(intent);
+    return this.run(entitySet, params);
+  }
 
+  private async run(
+    entitySet: string,
+    params: ODataParams,
+  ): Promise<QueryEnvelope<BusinessPartner>> {
+    const { url, durationMs, payload } = await this.sap.get(entitySet, params);
+    const data = unwrapCollection<Record<string, unknown>>(payload).map(toBusinessPartner);
     return { query: url, durationMs, count: data.length, data, raw: payload };
   }
 }
 
+/**
+ * Map an SAP row onto our shape.
+ *
+ * Fields outside the query's projection come back absent, and normalise to an
+ * empty string rather than undefined, so the table never renders a hole.
+ */
 function toBusinessPartner(record: Record<string, unknown>): BusinessPartner {
   return {
     businessPartner: str(record, 'BusinessPartner'),
