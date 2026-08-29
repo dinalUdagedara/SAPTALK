@@ -1,6 +1,6 @@
 # SAPTalk
 
-[![CI](https://github.com/dinalUdagedara/SAPTALK/actions/workflows/ci.yml/badge.svg)](https://github.com/dinalUdagedara/SAPTALK/actions/workflows/ci.yml)
+[![CI](https://github.com/dinalUdagedara/SAPTalk/actions/workflows/ci.yml/badge.svg)](https://github.com/dinalUdagedara/SAPTalk/actions/workflows/ci.yml)
 
 **Ask questions about SAP business data in plain English.**
 
