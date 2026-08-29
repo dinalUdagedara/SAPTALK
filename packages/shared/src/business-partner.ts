@@ -16,18 +16,3 @@ export interface BusinessPartner {
   /** ISO-8601 string, or null when SAP returned no date. */
   createdOn: string | null;
 }
-
-/** Field names as they appear in the OData V2 entity, for query building. */
-export const BUSINESS_PARTNER_FIELDS = [
-  'BusinessPartner',
-  'BusinessPartnerFullName',
-  'BusinessPartnerCategory',
-  'BusinessPartnerGrouping',
-  'OrganizationBPName1',
-  'FirstName',
-  'LastName',
-  'CreatedByUser',
-  'CreationDate',
-] as const;
-
-export type BusinessPartnerField = (typeof BUSINESS_PARTNER_FIELDS)[number];
