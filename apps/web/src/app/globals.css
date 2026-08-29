@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: oklch(0.99 0.003 250);
+  --color-ink: oklch(0.22 0.02 260);
+  --color-muted: oklch(0.52 0.02 260);
+  --color-line: oklch(0.91 0.01 260);
+  --color-accent: oklch(0.55 0.15 250);
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+}
