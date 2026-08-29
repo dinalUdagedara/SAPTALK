@@ -1,6 +1,6 @@
 # SAPTalk
 
-[![CI](https://github.com/dinalUdagedara/SAPTALK/actions/workflows/ci.yml/badge.svg)](https://github.com/dinalUdagedara/SAPTALK/actions/workflows/ci.yml)
+[![CI](https://github.com/dinalUdagedara/SAPTalk/actions/workflows/ci.yml/badge.svg)](https://github.com/dinalUdagedara/SAPTalk/actions/workflows/ci.yml)
 
 **Ask questions about SAP business data in plain English.**
 
@@ -8,7 +8,7 @@ An LLM translates the question into a structured *query intent*. It never writes
 Deterministic, testable code validates that intent against a field allowlist and compiles
 it into a valid OData query — and the generated query is always shown to the user.
 
-<!-- TODO: screenshot of the UI once the query bar lands in milestone 4 -->
+![SAPTalk: a question, the intent the model produced, and the OData compiled from it](docs/screenshot.png)
 
 ---
 
@@ -62,19 +62,19 @@ An intent looks like this:
 
 ## Status
 
-Milestone 3 of 5. Questions can be answered end to end from a structured intent, verified
-against the live sandbox. The LLM that will produce those intents is not wired up yet.
+All five milestones complete. Ask a question in plain English and the answer comes back with
+the intent the model produced and the OData compiled from it, side by side.
 
 | | Milestone | State |
 |---|---|---|
 | 1 | End-to-end pipe — button → API → SAP → table | ✅ Done |
 | 2 | Query intent schema (Zod) in `packages/shared` | ✅ Done |
 | 3 | Intent → OData compiler, unit tested | ✅ Done |
-| 4 | LLM layer via structured outputs | Next |
-| 5 | Example questions, intent shown beside the query | Planned |
+| 4 | LLM layer via structured outputs | ✅ Done |
+| 5 | UI — intent shown beside the generated query | ✅ Done |
 
-The model layer is deliberately last. By the time the schema and compiler exist, it is the
-easy part.
+The model layer was deliberately built last. By the time the schema and compiler existed, it
+was the easy part.
 
 ---
 
@@ -158,8 +158,14 @@ API key, no network and no model. CI runs all three on every pull request.
 ### API
 
 ```http
+POST /api/ask                             # ask a question in plain English
+POST /api/sap/query                       # run a query intent directly
 GET  /api/sap/business-partners?top=10    # unfiltered first page
-POST /api/sap/query                       # run a query intent
+```
+
+```bash
+curl -X POST localhost:3001/api/ask -H 'Content-Type: application/json' \
+  -d '{ "question": "organisations added this year, newest first" }'
 ```
 
 Both return a `QueryEnvelope`: the resolved SAP URL, upstream duration, normalised rows, and
@@ -193,7 +199,14 @@ apps/api/                        NestJS backend, port 3001
     intent-compiler.ts           intent -> OData V2 params, a pure function
     odata-v2.ts                  V2 dialect helpers
 apps/web/                        Next.js frontend, port 3000
-  src/app/page.tsx               button, query preview, table, raw panel
+  src/app/page.tsx               composes the whole view
+  src/components/
+    ask-bar.tsx                  the question input
+    intent-panel.tsx             what the model decided
+    query-panel.tsx              the OData our code built
+    results-table.tsx            rows from SAP
+    empty-state.tsx              the pipeline, before the first question
+    ui/                          shadcn/ui primitives
   src/lib/api.ts                 typed client
 packages/shared/                 types imported by both
   src/api.ts                     QueryEnvelope
@@ -229,7 +242,7 @@ that needs a second API, not more rows.
 | Layer | Choice | Why |
 |---|---|---|
 | Backend | NestJS | One language means the intent schema is defined once and reused by the model prompt, the validator and the UI. FastAPI would mean a Pydantic model plus a hand-mirrored TS type that drifts. |
-| Frontend | Next.js, TypeScript, Tailwind v4 | — |
+| Frontend | Next.js, TypeScript, Tailwind v4, shadcn/ui | Dark console UI. The intent and the compiled query sit side by side, because seeing both together is the product's argument. |
 | Validation | Zod *(milestone 2)* | Same schema constrains the model's structured output and validates the request. |
 | Data | SAP Business Accelerator Hub sandbox | Free, realistic, no real financial data. |
 | HTTP | Native `fetch` | Node 24 ships it; `AbortSignal.timeout()` covers timeouts. No client library needed. |
