@@ -213,3 +213,88 @@ describe('a realistic question', () => {
     expect(errors.length).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe('entities are isolated from each other', () => {
+  // The model's JSON schema offers every field from every entity, because
+  // JSON Schema cannot tie one property's legal values to another's. So a
+  // cross-entity intent is schema-valid and reaches the validator intact.
+  // This is the check that stops it.
+  it('rejects an address field on a partner query', () => {
+    const errors = expectRejected({
+      entity: 'BusinessPartner',
+      filters: [{ field: 'CityName', op: 'eq', value: 'London' }],
+    });
+    expect(errors[0]).toContain('Unknown field "CityName"');
+  });
+
+  it('rejects a partner field on an address query', () => {
+    const errors = expectRejected({
+      entity: 'BusinessPartnerAddress',
+      filters: [{ field: 'BusinessPartnerCategory', op: 'eq', value: '2' }],
+    });
+    expect(errors[0]).toContain('Unknown field "BusinessPartnerCategory"');
+  });
+
+  it('names the fields that DO exist on the chosen entity, so a retry can fix it', () => {
+    const errors = expectRejected({
+      entity: 'BusinessPartner',
+      select: ['CityName'],
+    });
+    expect(errors[0]).toContain('BusinessPartnerFullName');
+    expect(errors[0]).not.toContain('CityName cannot be');
+  });
+
+  it('accepts the same field name where both entities define it', () => {
+    // BusinessPartner is a field on both, and means the same thing.
+    expectOk({ entity: 'BusinessPartner', select: ['BusinessPartner'] });
+    expectOk({ entity: 'BusinessPartnerAddress', select: ['BusinessPartner'] });
+  });
+
+  it('resolves a different default projection per entity', () => {
+    const partner = expectOk({ entity: 'BusinessPartner' });
+    const address = expectOk({ entity: 'BusinessPartnerAddress' });
+    expect(partner.select).not.toEqual(address.select);
+    expect(address.select).toContain('CityName');
+  });
+});
+
+describe('the address entity', () => {
+  it('validates a realistic address question', () => {
+    const intent = expectOk({
+      entity: 'BusinessPartnerAddress',
+      filters: [
+        { field: 'CityName', op: 'eq', value: 'London' },
+        { field: 'Country', op: 'eq', value: 'GB' },
+      ],
+      orderBy: [{ field: 'PostalCode', direction: 'asc' }],
+      top: 10,
+    });
+    expect(intent.entity).toBe('BusinessPartnerAddress');
+    expect(intent.filters).toHaveLength(2);
+  });
+
+  it('allows contains on a city name', () => {
+    expectOk({
+      entity: 'BusinessPartnerAddress',
+      filters: [{ field: 'CityName', op: 'contains', value: 'lon' }],
+    });
+  });
+
+  it('rejects an ordering operator on a string field', () => {
+    expectRejected({
+      entity: 'BusinessPartnerAddress',
+      filters: [{ field: 'CityName', op: 'gte', value: 'L' }],
+    });
+  });
+
+  it('applies date rules to ValidityStartDate', () => {
+    expectOk({
+      entity: 'BusinessPartnerAddress',
+      filters: [{ field: 'ValidityStartDate', op: 'gte', value: '2020-01-01' }],
+    });
+    expectRejected({
+      entity: 'BusinessPartnerAddress',
+      filters: [{ field: 'ValidityStartDate', op: 'gte', value: 'last year' }],
+    });
+  });
+});

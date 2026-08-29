@@ -111,6 +111,48 @@ Response unwrapping and EDM date parsing are handled in
 
 ---
 
+## Two entities, one registry
+
+| Object | OData entity set | Answers |
+|---|---|---|
+| `BusinessPartner` | `A_BusinessPartner` | Who someone is — name, category, when they were created |
+| `BusinessPartnerAddress` | `A_BusinessPartnerAddress` | Where they are — city, country, region, street, postal code |
+
+The model chooses which one a question is about. *"Customers in London"* routes to addresses;
+*"customers created this year"* routes to partners.
+
+**Adding an entity is a change to [`fields.ts`](packages/shared/src/query-intent/fields.ts)
+and nothing else.** The model's JSON schema, the prose it reads, the validator, the compiler
+and the results table are all generated from the registry — no other file enumerates
+entities or fields. Rows are keyed by field name and columns travel with the response, so
+the table renders an entity it has never seen.
+
+### The schema narrows; the validator authorises
+
+JSON Schema cannot make one property's legal values depend on another's, so the model is
+offered *every* field from *every* entity. An intent that puts `CityName` on a
+`BusinessPartner` query is therefore schema-valid, and reaches the validator intact — which
+rejects it by name:
+
+```
+Unknown field "CityName" cannot be filtered on.
+Available fields: BusinessPartner, BusinessPartnerFullName, BusinessPartnerCategory, …
+```
+
+That message goes back to the model on retry. A second entity did not need a second
+safeguard; the existing one simply had more to do.
+
+### Known limitation: no joins
+
+A question spanning both objects — *"German companies with tech in the name"* — cannot be
+expressed, because country lives on the address and name lives on the partner. The model
+picks one object and **silently answers the narrower question**. It does not invent a field
+and it does not produce an invalid query, but it also does not tell you it dropped half your
+question. Closing that properly needs `$expand` across the navigation property, which is a
+separate piece of work.
+
+---
+
 ## Getting started
 
 **Requires** Node 22+ and pnpm 10+. CI runs the test suite on Node 22 and 24; 24 is what this is developed against.
@@ -160,7 +202,7 @@ API key, no network and no model. CI runs all three on every pull request.
 ```http
 POST /api/ask                             # ask a question in plain English
 POST /api/sap/query                       # run a query intent directly
-GET  /api/sap/business-partners?top=10    # unfiltered first page
+GET  /api/sap/rows?entity=BusinessPartner&top=10 # unfiltered first page, no model
 ```
 
 ```bash
@@ -238,7 +280,7 @@ prompt, the backend validator and the frontend renderer — three consumers, one
 apps/api/                        NestJS backend, port 3001
   src/sap/
     sap.service.ts               transport: builds URLs, calls SAP, maps errors
-    business-partner.service.ts  entity logic: projection + normalisation
+    query.service.ts             runs any registry entity; type-driven normalisation
     sap.controller.ts            HTTP surface
     intent-compiler.ts           intent -> OData V2 params, a pure function
     odata-v2.ts                  V2 dialect helpers
@@ -253,10 +295,10 @@ apps/web/                        Next.js frontend, port 3000
     ui/                          shadcn/ui primitives
   src/lib/api.ts                 typed client
 packages/shared/                 types imported by both
-  src/api.ts                     QueryEnvelope
-  src/business-partner.ts        normalised row shape
+  src/api.ts                     QueryEnvelope, generic rows + column metadata
   src/query-intent/              the validation boundary
-    fields.ts                    the field allowlist
+    fields.ts                    the entity + field registry -- the only place
+                                 entities are enumerated
     operators.ts                 operator vocabulary, dialect-independent
     intent.ts                    Zod schema + registry cross-checks
 docs/

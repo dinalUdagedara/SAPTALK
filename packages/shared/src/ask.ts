@@ -1,4 +1,3 @@
-import type { BusinessPartner } from './business-partner';
 import type { QueryEnvelope } from './api';
 import type { ResolvedQueryIntent } from './query-intent';
 
@@ -10,7 +9,7 @@ import type { ResolvedQueryIntent } from './query-intent';
  * what our code built from it, and a user can see that the second follows from
  * the first.
  */
-export interface AskResponse extends QueryEnvelope<BusinessPartner> {
+export interface AskResponse extends QueryEnvelope {
   question: string;
   intent: ResolvedQueryIntent;
   /** Model calls needed. 2 means the first attempt was rejected and corrected. */

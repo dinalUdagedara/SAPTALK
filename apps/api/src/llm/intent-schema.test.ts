@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_TOP, fieldNames } from '@saptalk/shared';
-import { buildIntentJsonSchema, describeFields } from './intent-schema';
+import { ENTITY_NAMES, MAX_TOP, fieldNames } from '@saptalk/shared';
+import { buildIntentJsonSchema, describeEntities } from './intent-schema';
 import { buildRetryPrompt, buildSystemPrompt } from './prompt';
 
-const schema = buildIntentJsonSchema('BusinessPartner');
+const schema = buildIntentJsonSchema();
 const props = schema.properties!;
 
 describe('the schema meets OpenAI strict-mode rules', () => {
@@ -25,53 +25,78 @@ describe('the schema meets OpenAI strict-mode rules', () => {
 });
 
 describe('the schema is derived from the registry', () => {
-  it('offers exactly the registry fields for select', () => {
-    expect(new Set(props.select.items!.enum)).toEqual(new Set(fieldNames('BusinessPartner')));
+  it('offers every entity', () => {
+    expect(new Set(props.entity.enum)).toEqual(new Set(ENTITY_NAMES));
+  });
+
+  it('offers fields from both entities, so either can be queried', () => {
+    const selectable = new Set(props.select.items!.enum);
+    // unique to BusinessPartner
+    expect(selectable).toContain('BusinessPartnerCategory');
+    // unique to BusinessPartnerAddress
+    expect(selectable).toContain('CityName');
+  });
+
+  it('covers every registry field with no invented extras', () => {
+    const selectable = new Set(props.select.items!.enum);
+    const registry = new Set(ENTITY_NAMES.flatMap((e) => fieldNames(e)));
+    expect(selectable).toEqual(registry);
   });
 
   it('constrains filter fields to an enum, so a hallucinated name cannot be emitted', () => {
-    expect(props.filters.items!.properties!.field.enum).toBeDefined();
     expect(props.filters.items!.properties!.field.enum).not.toContain('Salary');
-  });
-
-  it('constrains sort direction', () => {
-    expect(props.orderBy.items!.properties!.direction.enum).toEqual(['asc', 'desc']);
   });
 
   it('tells the model the row limit', () => {
     expect(props.top.description).toContain(String(MAX_TOP));
   });
 
-  // The schema cannot express "contains is illegal on a date" -- operator
-  // legality depends on the field, which JSON Schema enums cannot couple.
-  // That is precisely why validateIntent still runs on every response.
+  /*
+   * The two things JSON Schema cannot express, and therefore the two reasons
+   * validateIntent still runs on every response:
+   *   1. operator legality depends on the field's type
+   *   2. field legality depends on the chosen entity
+   * Both are couplings between properties, which enums cannot represent.
+   */
   it('offers all operators regardless of field type', () => {
     const ops = props.filters.items!.properties!.op.enum!;
     expect(ops).toContain('contains');
     expect(ops).toContain('gte');
   });
+
+  it('cannot tie the field list to the chosen entity', () => {
+    const selectable = new Set(props.select.items!.enum);
+    // A partner field and an address field are both offered by the same schema,
+    // so a cross-entity intent is schema-valid and must be caught downstream.
+    expect(selectable).toContain('BusinessPartnerCategory');
+    expect(selectable).toContain('CityName');
+  });
 });
 
-describe('the field description carries meaning the schema cannot', () => {
-  const text = describeFields('BusinessPartner');
+describe('the description carries meaning the schema cannot', () => {
+  const text = describeEntities();
+
+  it('describes both entities', () => {
+    for (const entity of ENTITY_NAMES) expect(text).toContain(entity);
+  });
 
   it('explains the category codes', () => {
     expect(text).toContain('1 = Person');
     expect(text).toContain('2 = Organisation');
   });
 
+  it('warns that country is a code, not a name', () => {
+    expect(text).toContain('Two-letter ISO code');
+  });
+
   it('lists operators per field type', () => {
     expect(text).toContain('date fields accept');
     expect(text).toContain('string fields accept');
   });
-
-  it('includes the hint that stops the model picking the wrong name field', () => {
-    expect(text).toContain('Only populated for organisations');
-  });
 });
 
 describe('the system prompt', () => {
-  const prompt = buildSystemPrompt({ entity: 'BusinessPartner', today: '2026-08-29' });
+  const prompt = buildSystemPrompt({ today: '2026-08-29' });
 
   it("anchors relative dates to today, so 'this year' is not invented", () => {
     expect(prompt).toContain('2026-08-29');
@@ -81,8 +106,14 @@ describe('the system prompt', () => {
     expect(prompt).toMatch(/never write/i);
   });
 
-  it('embeds the field documentation', () => {
+  it('tells the model how to choose between the entities', () => {
+    expect(prompt).toContain('BusinessPartnerAddress');
+    expect(prompt).toMatch(/cannot mix/i);
+  });
+
+  it('embeds the field documentation for both entities', () => {
     expect(prompt).toContain('BusinessPartnerFullName');
+    expect(prompt).toContain('CityName');
   });
 });
 

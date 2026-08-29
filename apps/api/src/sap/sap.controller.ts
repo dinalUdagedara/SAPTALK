@@ -9,19 +9,25 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { validateIntent, type BusinessPartner, type QueryEnvelope } from '@saptalk/shared';
-import { BusinessPartnerService } from './business-partner.service';
+import {
+  ENTITY_NAMES,
+  validateIntent,
+  type EntityName,
+  type QueryEnvelope,
+} from '@saptalk/shared';
+import { QueryService } from './query.service';
 
 @Controller('sap')
 export class SapController {
-  constructor(private readonly businessPartners: BusinessPartnerService) {}
+  constructor(private readonly queries: QueryService) {}
 
-  /** GET /api/sap/business-partners?top=10 */
-  @Get('business-partners')
+  /** GET /api/sap/rows?entity=BusinessPartnerAddress&top=10 */
+  @Get('rows')
   list(
+    @Query('entity', new DefaultValuePipe('BusinessPartner')) entity: string,
     @Query('top', new DefaultValuePipe(10), ParseIntPipe) top: number,
-  ): Promise<QueryEnvelope<BusinessPartner>> {
-    return this.businessPartners.list(top);
+  ): Promise<QueryEnvelope> {
+    return this.queries.list(readEntity(entity), top);
   }
 
   /**
@@ -30,13 +36,10 @@ export class SapController {
    * Takes a query intent and runs it. This is the boundary: the body is
    * untrusted -- it will eventually come from a language model -- so it is
    * validated against the field allowlist before anything is compiled.
-   *
-   * A rejected intent returns the reasons, which are written to be shown to a
-   * person and fed back to the model on a retry.
    */
   @Post('query')
   @HttpCode(200)
-  query(@Body() body: unknown): Promise<QueryEnvelope<BusinessPartner>> {
+  query(@Body() body: unknown): Promise<QueryEnvelope> {
     const result = validateIntent(body);
     if (!result.ok) {
       throw new BadRequestException({
@@ -44,6 +47,13 @@ export class SapController {
         errors: result.errors,
       });
     }
-    return this.businessPartners.query(result.intent);
+    return this.queries.query(result.intent);
   }
+}
+
+function readEntity(value: string): EntityName {
+  if ((ENTITY_NAMES as readonly string[]).includes(value)) return value as EntityName;
+  throw new BadRequestException(
+    `Unknown entity "${value}". Available: ${ENTITY_NAMES.join(', ')}.`,
+  );
 }

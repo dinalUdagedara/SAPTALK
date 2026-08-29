@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
-import { BusinessPartnerService } from './business-partner.service';
+import { QueryService } from './query.service';
 import { SapController } from './sap.controller';
 import { SapService } from './sap.service';
 
 @Module({
   controllers: [SapController],
-  providers: [SapService, BusinessPartnerService],
-  exports: [SapService, BusinessPartnerService],
+  providers: [SapService, QueryService],
+  exports: [SapService, QueryService],
 })
 export class SapModule {}

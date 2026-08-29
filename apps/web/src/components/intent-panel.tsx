@@ -24,8 +24,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 export function IntentPanel({ intent }: { intent: ResolvedQueryIntent }) {
   return (
     <div className="divide-y divide-border/60">
-      <Row label="Entity">
-        <span className="text-foreground">{intent.entity}</span>
+      <Row label="Object">
+        {/* Now a real decision the model makes, not a constant. */}
+        <span className="text-primary">{intent.entity}</span>
       </Row>
 
       <Row label="Filters">

@@ -211,3 +211,49 @@ describe('a realistic question end to end', () => {
     });
   });
 });
+
+describe('the address entity compiles too', () => {
+  it('targets the right entity set', () => {
+    expect(compile({ entity: 'BusinessPartnerAddress' }).entitySet).toBe(
+      'A_BusinessPartnerAddress',
+    );
+  });
+
+  it('uses the address default projection', () => {
+    const { params } = compile({ entity: 'BusinessPartnerAddress' });
+    expect(params.$select).toContain('CityName');
+    expect(params.$select).not.toContain('BusinessPartnerCategory');
+  });
+
+  it('compiles a city filter', () => {
+    const { params } = compile({
+      entity: 'BusinessPartnerAddress',
+      filters: [{ field: 'CityName', op: 'eq', value: 'London' }],
+    });
+    expect(params.$filter).toBe("CityName eq 'London'");
+  });
+
+  it('compiles contains on a city the same way it does on a partner name', () => {
+    const { params } = compile({
+      entity: 'BusinessPartnerAddress',
+      filters: [{ field: 'CityName', op: 'contains', value: 'lon' }],
+    });
+    expect(params.$filter).toBe("substringof('lon',CityName)");
+  });
+
+  it('escapes address values, so the boundary holds on the new entity too', () => {
+    const { params } = compile({
+      entity: 'BusinessPartnerAddress',
+      filters: [{ field: 'CityName', op: 'eq', value: "O'Fallon" }],
+    });
+    expect(params.$filter).toBe("CityName eq 'O''Fallon'");
+  });
+
+  it('renders its date field as a V2 datetime literal', () => {
+    const { params } = compile({
+      entity: 'BusinessPartnerAddress',
+      filters: [{ field: 'ValidityStartDate', op: 'gte', value: '2020-01-01' }],
+    });
+    expect(params.$filter).toBe("ValidityStartDate ge datetime'2020-01-01T00:00:00'");
+  });
+});
