@@ -9,7 +9,8 @@
     "dev:api": "pnpm build:shared && pnpm --filter @saptalk/api start:dev",
     "dev:web": "pnpm build:shared && pnpm --filter @saptalk/web dev",
     "build": "pnpm build:shared && pnpm --filter @saptalk/api build && pnpm --filter @saptalk/web build",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

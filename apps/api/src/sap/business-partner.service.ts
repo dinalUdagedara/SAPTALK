@@ -1,13 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import {
-  BUSINESS_PARTNER_FIELDS,
+  fieldNames,
+  getEntity,
   type BusinessPartner,
   type QueryEnvelope,
 } from '@saptalk/shared';
 import { SapService } from './sap.service';
 import { parseEdmDate, str, unwrapCollection } from './odata-v2';
 
-const ENTITY_SET = 'A_BusinessPartner';
+const ENTITY = 'BusinessPartner' as const;
 const DEFAULT_TOP = 10;
 const MAX_TOP = 100;
 
@@ -24,9 +25,11 @@ export class BusinessPartnerService {
   async list(top: number = DEFAULT_TOP): Promise<QueryEnvelope<BusinessPartner>> {
     const safeTop = clamp(top, 1, MAX_TOP);
 
-    const { url, durationMs, payload } = await this.sap.get(ENTITY_SET, {
+    // Every registry field, so the normalised row is fully populated. Once
+    // intents drive the query, the projection comes from the intent instead.
+    const { url, durationMs, payload } = await this.sap.get(getEntity(ENTITY).entitySet, {
       $top: safeTop,
-      $select: BUSINESS_PARTNER_FIELDS.join(','),
+      $select: fieldNames(ENTITY).join(','),
     });
 
     const rows = unwrapCollection<Record<string, unknown>>(payload);
