@@ -1,5 +1,5 @@
 import { Injectable, Logger, UnprocessableEntityException } from '@nestjs/common';
-import { validateIntent, type EntityName, type ResolvedQueryIntent } from '@saptalk/shared';
+import { validateIntent, type ResolvedQueryIntent } from '@saptalk/shared';
 import { OpenAiService, type ChatMessage } from './openai.service';
 import { buildIntentJsonSchema } from './intent-schema';
 import { buildRetryPrompt, buildSystemPrompt, buildUserPrompt } from './prompt';
@@ -13,7 +13,6 @@ export interface GeneratedIntent {
 
 /** One retry. A second failure on the same errors is unlikely to be a third. */
 const MAX_ATTEMPTS = 2;
-const ENTITY: EntityName = 'BusinessPartner';
 
 /**
  * Turns a question into a validated intent.
@@ -30,9 +29,10 @@ export class IntentGeneratorService {
   constructor(private readonly openai: OpenAiService) {}
 
   async generate(question: string, now: Date = new Date()): Promise<GeneratedIntent> {
-    const schema = buildIntentJsonSchema(ENTITY);
+    // The model now chooses the entity too, so nothing here names one.
+    const schema = buildIntentJsonSchema();
     const messages: ChatMessage[] = [
-      { role: 'system', content: buildSystemPrompt({ entity: ENTITY, today: isoDate(now) }) },
+      { role: 'system', content: buildSystemPrompt({ today: isoDate(now) }) },
       { role: 'user', content: buildUserPrompt(question) },
     ];
 

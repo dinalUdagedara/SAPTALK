@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import type { AskResponse } from '@saptalk/shared';
 import { AskThrottleGuard } from '../common/ask-throttle.guard';
-import { BusinessPartnerService } from '../sap/business-partner.service';
+import { QueryService } from '../sap/query.service';
 import { IntentGeneratorService } from '../llm/intent-generator.service';
 
 const MAX_QUESTION_LENGTH = 300;
@@ -10,7 +10,7 @@ const MAX_QUESTION_LENGTH = 300;
 export class AskController {
   constructor(
     private readonly intents: IntentGeneratorService,
-    private readonly businessPartners: BusinessPartnerService,
+    private readonly queries: QueryService,
   ) {}
 
   /**
@@ -26,7 +26,7 @@ export class AskController {
   async ask(@Body() body: unknown): Promise<AskResponse> {
     const question = readQuestion(body);
     const generated = await this.intents.generate(question);
-    const envelope = await this.businessPartners.query(generated.intent);
+    const envelope = await this.queries.query(generated.intent);
 
     return {
       ...envelope,

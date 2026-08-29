@@ -64,10 +64,10 @@ export default function Home() {
 
       <main className="mx-auto max-w-5xl px-4 pb-24 pt-10 sm:px-6 sm:pt-12">
         <h1 className="text-balance text-xl font-semibold tracking-tight sm:text-[28px]">
-          Ask about business partners
+          Ask about SAP business data
         </h1>
         <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-          Plain English in, a validated OData query out — and you see the query every time.
+          Partners and their addresses. Plain English in, a validated OData query out — and you see the query every time.
         </p>
 
         <div className="mt-6 flex flex-col gap-3">
@@ -125,7 +125,7 @@ function Result({ result }: { result: AskResponse }) {
 
         <TabsContent value="results">
           <div className="overflow-hidden rounded-lg border border-border bg-surface/40">
-            <ResultsTable rows={result.data} />
+            <ResultsTable columns={result.columns} rows={result.data} />
           </div>
         </TabsContent>
 

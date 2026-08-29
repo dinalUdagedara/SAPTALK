@@ -2,17 +2,19 @@
  * Projects the field registry into the two things a model needs: a JSON schema
  * it must conform to, and a readable description of what the fields mean.
  *
- * Both are derived from the registry rather than written by hand, so adding a
- * field to fields.ts teaches the model about it automatically -- there is no
+ * Both are derived from the registry rather than written by hand, so adding an
+ * entity to fields.ts teaches the model about it automatically -- there is no
  * second list to forget to update.
  *
- * This is a prompt-engineering artifact, NOT a security boundary. The schema
- * constrains shape and vocabulary; it cannot express that `contains` is illegal
- * on a date, or that an enum value must be one of three codes. Those are
- * checked by validateIntent afterwards, on every response, always.
+ * This is a prompt-engineering artifact, NOT a security boundary. It cannot
+ * express that `contains` is illegal on a date, nor that CityName belongs to
+ * addresses and not to partners: JSON Schema has no way to make one property's
+ * legal values depend on another's. Those are checked by validateIntent
+ * afterwards, on every response, always.
  */
 
 import {
+  ENTITIES,
   ENTITY_NAMES,
   MAX_TOP,
   OPERATOR_NAMES,
@@ -33,22 +35,34 @@ export interface JsonSchema {
   additionalProperties?: boolean;
 }
 
+function fieldsOf(entity: EntityName): FieldDef[] {
+  return Object.values(getEntity(entity).fields) as FieldDef[];
+}
+
+/** Every field name across every entity, deduplicated. */
+function allFieldNames(predicate: (field: FieldDef) => boolean): string[] {
+  const names = new Set<string>();
+  for (const entity of ENTITY_NAMES) {
+    for (const field of fieldsOf(entity)) {
+      if (predicate(field)) names.add(field.name);
+    }
+  }
+  return [...names];
+}
+
 /**
  * Build the schema the model must fill in.
  *
- * Strict mode requires every property to be listed in `required` and forbids
- * additional properties, so nothing is optional here: the model returns empty
- * arrays rather than omitting keys. `validateIntent` treats an empty `select`
- * as "use the default projection", so this costs nothing downstream.
+ * Field enums are the union across entities, because JSON Schema cannot tie
+ * the legal field list to the chosen entity. The union still rules out invented
+ * field names, and mixing an address field into a partner query is caught by
+ * the validator, which says so precisely enough for the retry to fix it.
+ *
+ * Strict mode requires every property in `required` and forbids extra
+ * properties, so nothing is optional: the model returns empty arrays rather
+ * than omitting keys.
  */
-export function buildIntentJsonSchema(entity: EntityName): JsonSchema {
-  const def = getEntity(entity);
-  const fields = Object.values(def.fields) as FieldDef[];
-
-  const selectable = fields.map((f) => f.name);
-  const filterable = fields.filter((f) => f.filterable).map((f) => f.name);
-  const sortable = fields.filter((f) => f.sortable).map((f) => f.name);
-
+export function buildIntentJsonSchema(): JsonSchema {
   return {
     type: 'object',
     additionalProperties: false,
@@ -57,14 +71,15 @@ export function buildIntentJsonSchema(entity: EntityName): JsonSchema {
       entity: {
         type: 'string',
         enum: [...ENTITY_NAMES],
-        description: 'The business object being asked about.',
+        description:
+          'Which business object the question is about. Every field you use must belong to it.',
       },
       select: {
         type: 'array',
         description:
           'Columns to show. Use an empty array for the sensible default set. ' +
           'Only add columns the question actually asks about.',
-        items: { type: 'string', enum: selectable },
+        items: { type: 'string', enum: allFieldNames(() => true) },
       },
       filters: {
         type: 'array',
@@ -75,7 +90,7 @@ export function buildIntentJsonSchema(entity: EntityName): JsonSchema {
           additionalProperties: false,
           required: ['field', 'op', 'value'],
           properties: {
-            field: { type: 'string', enum: filterable },
+            field: { type: 'string', enum: allFieldNames((f) => f.filterable) },
             op: { type: 'string', enum: [...OPERATOR_NAMES] },
             value: {
               type: 'string',
@@ -89,7 +104,8 @@ export function buildIntentJsonSchema(entity: EntityName): JsonSchema {
       filterLogic: {
         type: 'string',
         enum: ['and', 'or'],
-        description: 'How to combine multiple filters. Use "and" unless the question says otherwise.',
+        description:
+          'How to combine multiple filters. Use "and" unless the question says otherwise.',
       },
       orderBy: {
         type: 'array',
@@ -99,7 +115,7 @@ export function buildIntentJsonSchema(entity: EntityName): JsonSchema {
           additionalProperties: false,
           required: ['field', 'direction'],
           properties: {
-            field: { type: 'string', enum: sortable },
+            field: { type: 'string', enum: allFieldNames((f) => f.sortable) },
             direction: { type: 'string', enum: ['asc', 'desc'] },
           },
         },
@@ -112,18 +128,11 @@ export function buildIntentJsonSchema(entity: EntityName): JsonSchema {
   };
 }
 
-/**
- * Describe the fields in prose.
- *
- * The JSON schema constrains vocabulary but carries no meaning: it cannot say
- * that OrganizationBPName1 is empty for people, or that category 2 means an
- * organisation. Without that, the model picks plausible-looking wrong fields.
- */
-export function describeFields(entity: EntityName): string {
-  const def = getEntity(entity);
-
-  const lines = (Object.values(def.fields) as FieldDef[]).map((field) => {
-    const parts = [`- ${field.name} (${field.type}) -- ${field.label}.`];
+/** Describe one entity and its fields in prose. */
+function describeEntity(entity: EntityName): string {
+  const def = ENTITIES[entity];
+  const lines = fieldsOf(entity).map((field) => {
+    const parts = [`  - ${field.name} (${field.type}) -- ${field.label}.`];
     if (field.values) {
       parts.push(`Values: ${field.values.map((v) => `${v.value} = ${v.label}`).join(', ')}.`);
     }
@@ -132,14 +141,25 @@ export function describeFields(entity: EntityName): string {
     if (!field.sortable) parts.push('Cannot be sorted.');
     return parts.join(' ');
   });
+  return [`${entity} -- ${def.description}`, ...lines].join('\n');
+}
 
+/**
+ * Describe every entity.
+ *
+ * The JSON schema constrains vocabulary but carries no meaning: it cannot say
+ * that CityName lives on addresses, or that category 2 means an organisation.
+ * Without that, the model picks plausible-looking wrong fields.
+ */
+export function describeEntities(): string {
   const operatorLines = (['string', 'enum', 'date'] as const).map(
     (type) => `- ${type} fields accept: ${operatorsFor(type).join(', ')}`,
   );
 
   return [
-    `Fields on ${def.label}:`,
-    ...lines,
+    'Available business objects and their fields:',
+    '',
+    ENTITY_NAMES.map(describeEntity).join('\n\n'),
     '',
     'Operators by field type:',
     ...operatorLines,

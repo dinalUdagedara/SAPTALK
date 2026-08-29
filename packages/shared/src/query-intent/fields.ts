@@ -114,12 +114,123 @@ export const BUSINESS_PARTNER_FIELDS = {
 
 export type BusinessPartnerFieldName = keyof typeof BUSINESS_PARTNER_FIELDS;
 
-/** Entities an intent may target. One for now; the shape allows more. */
+/**
+ * Addresses belonging to business partners.
+ *
+ * Field names and population rates were measured against the live sandbox on
+ * 2026-08-29 across a 500-row sample; fields populated in fewer than a fifth of
+ * rows are left out, because a queryable field that is almost always empty
+ * produces confidently empty answers.
+ */
+export const BUSINESS_PARTNER_ADDRESS_FIELDS = {
+  BusinessPartner: {
+    name: 'BusinessPartner',
+    label: 'Partner ID',
+    type: 'string',
+    filterable: true,
+    sortable: true,
+    hint: 'The business partner this address belongs to. Use it to tie an address back to a partner.',
+  },
+  AddressID: {
+    name: 'AddressID',
+    label: 'Address ID',
+    type: 'string',
+    filterable: true,
+    sortable: true,
+  },
+  CityName: {
+    name: 'CityName',
+    label: 'City',
+    type: 'string',
+    filterable: true,
+    sortable: true,
+    hint: 'Populated on almost every address. The right field for "addresses in London".',
+  },
+  Country: {
+    name: 'Country',
+    label: 'Country',
+    type: 'string',
+    filterable: true,
+    sortable: true,
+    hint: 'Two-letter ISO code, upper case: DE, US, GB, FR. Never the country name.',
+  },
+  Region: {
+    name: 'Region',
+    label: 'Region',
+    type: 'string',
+    filterable: true,
+    sortable: true,
+    hint: 'State or province code within the country, such as GA or BW.',
+  },
+  PostalCode: {
+    name: 'PostalCode',
+    label: 'Postal code',
+    type: 'string',
+    filterable: true,
+    sortable: true,
+  },
+  StreetName: {
+    name: 'StreetName',
+    label: 'Street',
+    type: 'string',
+    filterable: true,
+    sortable: true,
+  },
+  HouseNumber: {
+    name: 'HouseNumber',
+    label: 'House number',
+    type: 'string',
+    filterable: true,
+    sortable: true,
+  },
+  FullName: {
+    name: 'FullName',
+    label: 'Name',
+    type: 'string',
+    filterable: true,
+    sortable: true,
+    hint: 'Name held on the address record itself, which may differ from the partner name.',
+  },
+  Language: {
+    name: 'Language',
+    label: 'Language',
+    type: 'string',
+    filterable: true,
+    sortable: true,
+    hint: 'Two-letter code, upper case: EN, DE, FR.',
+  },
+  AddressTimeZone: {
+    name: 'AddressTimeZone',
+    label: 'Time zone',
+    type: 'string',
+    filterable: true,
+    sortable: true,
+    hint: 'SAP zone code such as CET, EST, GMTUK -- not an IANA name.',
+  },
+  ValidityStartDate: {
+    name: 'ValidityStartDate',
+    label: 'Valid from',
+    type: 'date',
+    filterable: true,
+    sortable: true,
+  },
+} as const satisfies Record<string, FieldDef>;
+
+export type BusinessPartnerAddressFieldName = keyof typeof BUSINESS_PARTNER_ADDRESS_FIELDS;
+
+/**
+ * Entities an intent may target.
+ *
+ * Everything downstream -- the model's schema, the validator, the compiler and
+ * the table -- is generated from this map. Adding an entity here is the whole
+ * change; no other file enumerates entities or fields.
+ */
 export const ENTITIES = {
   BusinessPartner: {
     /** OData entity set name. */
     entitySet: 'A_BusinessPartner',
     label: 'Business Partner',
+    description: 'Companies and people the business deals with: customers, suppliers, contacts.',
     fields: BUSINESS_PARTNER_FIELDS as Record<string, FieldDef>,
     /** Projection used when an intent does not specify `select`. */
     defaultSelect: [
@@ -129,6 +240,21 @@ export const ENTITIES = {
       'BusinessPartnerGrouping',
       'CreatedByUser',
       'CreationDate',
+    ],
+  },
+  BusinessPartnerAddress: {
+    entitySet: 'A_BusinessPartnerAddress',
+    label: 'Business Partner Address',
+    description:
+      'Where business partners are located: city, country, region, street, postal code.',
+    fields: BUSINESS_PARTNER_ADDRESS_FIELDS as Record<string, FieldDef>,
+    defaultSelect: [
+      'BusinessPartner',
+      'FullName',
+      'CityName',
+      'Region',
+      'Country',
+      'PostalCode',
     ],
   },
 } as const;
@@ -148,4 +274,13 @@ export function getField(entity: EntityName, field: string): FieldDef | undefine
 
 export function fieldNames(entity: EntityName): string[] {
   return Object.keys(ENTITIES[entity].fields);
+}
+
+/** Column metadata for a projection, in the order the fields were selected. */
+export function columnsFor(entity: EntityName, select: string[]) {
+  const fields = ENTITIES[entity].fields;
+  return select
+    .map((name) => fields[name])
+    .filter((field): field is FieldDef => Boolean(field))
+    .map((field) => ({ name: field.name, label: field.label, type: field.type }));
 }

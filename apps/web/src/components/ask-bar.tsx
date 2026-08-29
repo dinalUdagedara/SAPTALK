@@ -35,8 +35,8 @@ export function AskBar({ value, onChange, onSubmit, loading }: AskBarProps) {
         onChange={(event) => onChange(event.target.value)}
         disabled={loading}
         maxLength={300}
-        placeholder="Ask about business partners…"
-        aria-label="Ask a question about business partners"
+        placeholder="Ask about partners or addresses…"
+        aria-label="Ask a question about SAP business data"
         className={cn(
           'h-10 flex-1 bg-transparent text-[15px] text-foreground outline-none',
           'placeholder:text-muted-foreground/70 disabled:opacity-60',

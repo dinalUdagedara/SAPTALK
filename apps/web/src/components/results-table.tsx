@@ -1,4 +1,4 @@
-import type { BusinessPartner } from '@saptalk/shared';
+import type { ColumnMeta, QueryRow } from '@saptalk/shared';
 import {
   Table,
   TableBody,
@@ -8,30 +8,44 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-const COLUMNS = [
-  { key: 'businessPartner', label: 'ID', mono: true },
-  { key: 'businessPartnerFullName', label: 'Name', mono: false },
-  { key: 'businessPartnerCategory', label: 'Category', mono: false },
-  { key: 'businessPartnerGrouping', label: 'Grouping', mono: true },
-  { key: 'createdByUser', label: 'Created by', mono: true },
-  { key: 'createdOn', label: 'Created', mono: true },
-] as const satisfies readonly { key: keyof BusinessPartner; label: string; mono: boolean }[];
+/**
+ * Renders whatever the query returned.
+ *
+ * Columns come from the response, which derives them from the field registry,
+ * so a new entity is renderable without this file changing. There is no column
+ * list here on purpose -- one would put the per-entity assumption straight back.
+ */
 
-/** Category arrives as a code; nobody reads "2". */
-const CATEGORY_LABELS: Record<string, string> = {
-  '1': 'Person',
-  '2': 'Organisation',
-  '3': 'Group',
+/**
+ * Codes that mean nothing to a reader.
+ *
+ * Keyed by field name rather than entity: a code means the same thing wherever
+ * it appears, and the table does not know which entity it is showing.
+ */
+const CODE_LABELS: Record<string, Record<string, string>> = {
+  BusinessPartnerCategory: { '1': 'Person', '2': 'Organisation', '3': 'Group' },
 };
 
-function render(key: keyof BusinessPartner, value: string | null): string {
-  if (!value) return '—';
-  if (key === 'businessPartnerCategory') return CATEGORY_LABELS[value] ?? value;
-  if (key === 'createdOn') return value.slice(0, 10);
+/** Values that read better right-aligned or in mono. */
+function isMono(column: ColumnMeta): boolean {
+  return column.type === 'date' || /ID$|^BusinessPartner$|Code$|Grouping$|User$/.test(column.name);
+}
+
+function render(column: ColumnMeta, value: string | null): string {
+  if (value === null || value === '') return '—';
+  const labels = CODE_LABELS[column.name];
+  if (labels?.[value]) return labels[value];
+  if (column.type === 'date') return value.slice(0, 10);
   return value;
 }
 
-export function ResultsTable({ rows }: { rows: BusinessPartner[] }) {
+export function ResultsTable({
+  columns,
+  rows,
+}: {
+  columns: ColumnMeta[];
+  rows: QueryRow[];
+}) {
   if (rows.length === 0) {
     return (
       <div className="px-4 py-10 text-center">
@@ -48,9 +62,9 @@ export function ResultsTable({ rows }: { rows: BusinessPartner[] }) {
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
-            {COLUMNS.map((column) => (
+            {columns.map((column) => (
               <TableHead
-                key={column.key}
+                key={column.name}
                 className="whitespace-nowrap text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground"
               >
                 {column.label}
@@ -60,17 +74,17 @@ export function ResultsTable({ rows }: { rows: BusinessPartner[] }) {
         </TableHeader>
         <TableBody>
           {rows.map((row, index) => (
-            <TableRow key={`${row.businessPartner}-${index}`}>
-              {COLUMNS.map((column) => (
+            <TableRow key={index}>
+              {columns.map((column) => (
                 <TableCell
-                  key={column.key}
+                  key={column.name}
                   className={
-                    column.mono
+                    isMono(column)
                       ? 'tabular whitespace-nowrap font-mono text-[12.5px] text-muted-foreground'
                       : 'whitespace-nowrap text-[13px] text-foreground'
                   }
                 >
-                  {render(column.key, row[column.key])}
+                  {render(column, row[column.name] ?? null)}
                 </TableCell>
               ))}
             </TableRow>
