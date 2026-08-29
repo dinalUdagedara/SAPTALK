@@ -298,3 +298,81 @@ describe('the address entity', () => {
     });
   });
 });
+
+describe('cross-object conditions', () => {
+  const spanning = {
+    entity: 'BusinessPartner',
+    filters: [{ field: 'BusinessPartnerCategory', op: 'eq', value: '2' }],
+    related: {
+      entity: 'BusinessPartnerAddress',
+      filters: [{ field: 'Country', op: 'eq', value: 'DE' }],
+    },
+  };
+
+  it('accepts a condition on a related object and resolves the join key', () => {
+    const intent = expectOk(spanning);
+    expect(intent.related?.entity).toBe('BusinessPartnerAddress');
+    expect(intent.related?.joinField).toBe('BusinessPartner');
+  });
+
+  it('validates related fields against the RELATED object, not the main one', () => {
+    // Country is an address field, illegal in the main filters...
+    expectRejected({
+      entity: 'BusinessPartner',
+      filters: [{ field: 'Country', op: 'eq', value: 'DE' }],
+    });
+    // ...and legal in the related block.
+    expectOk(spanning);
+  });
+
+  it('rejects an unknown field inside the related block', () => {
+    const errors = expectRejected({
+      ...spanning,
+      related: {
+        entity: 'BusinessPartnerAddress',
+        filters: [{ field: 'Salary', op: 'eq', value: '1' }],
+      },
+    });
+    expect(errors[0]).toContain('Unknown field "Salary"');
+  });
+
+  it('rejects an illegal operator inside the related block', () => {
+    expectRejected({
+      ...spanning,
+      related: {
+        entity: 'BusinessPartnerAddress',
+        filters: [{ field: 'ValidityStartDate', op: 'contains', value: '2024' }],
+      },
+    });
+  });
+
+  it('rejects relating an object to itself', () => {
+    const errors = expectRejected({
+      ...spanning,
+      related: {
+        entity: 'BusinessPartner',
+        filters: [{ field: 'BusinessPartnerCategory', op: 'eq', value: '2' }],
+      },
+    });
+    expect(errors[0]).toContain('must differ');
+  });
+
+  // Strict-mode schemas cannot mark a property optional, so the model always
+  // sends this object. An empty filter list is how it says "not needed".
+  it('treats an empty related filter list as unused', () => {
+    const intent = expectOk({
+      entity: 'BusinessPartner',
+      related: { entity: 'BusinessPartnerAddress', filters: [] },
+    });
+    expect(intent.related).toBeUndefined();
+  });
+
+  it('ignores the related entity entirely when there are no related filters', () => {
+    // Even a self-reference is fine when unused, because it means nothing.
+    const intent = expectOk({
+      entity: 'BusinessPartner',
+      related: { entity: 'BusinessPartner', filters: [] },
+    });
+    expect(intent.related).toBeUndefined();
+  });
+});

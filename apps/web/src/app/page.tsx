@@ -6,6 +6,7 @@ import { AskBar } from '@/components/ask-bar';
 import { EmptyState } from '@/components/empty-state';
 import { ExampleQuestions } from '@/components/example-questions';
 import { IntentPanel } from '@/components/intent-panel';
+import { JoinNotice } from '@/components/join-notice';
 import { QueryPanel } from '@/components/query-panel';
 import { RejectionPanel } from '@/components/rejection-panel';
 import { ResultMetrics } from '@/components/result-metrics';
@@ -110,6 +111,9 @@ function Result({ result }: { result: AskResponse }) {
           <QueryPanel url={result.query} />
         </Panel>
       </div>
+
+      {/* Only present when the question needed two objects. */}
+      {result.related && <JoinNotice related={result.related} />}
 
       <Tabs defaultValue="results">
         <TabsList className="max-w-full justify-start overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

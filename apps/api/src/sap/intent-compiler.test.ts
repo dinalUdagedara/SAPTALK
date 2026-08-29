@@ -257,3 +257,56 @@ describe('the address entity compiles too', () => {
     expect(params.$filter).toBe("ValidityStartDate ge datetime'2020-01-01T00:00:00'");
   });
 });
+
+describe('restricting to ids from a related query', () => {
+  const base = { entity: 'BusinessPartner' } as const;
+
+  function compileWith(intent: QueryIntent, ids: string[]) {
+    const result = validateIntent(intent);
+    if (!result.ok) throw new Error(result.errors.join(' | '));
+    return compileIntent(result.intent, { field: 'BusinessPartner', values: ids });
+  }
+
+  it('builds an or-chain, since V2 has no `in` operator', () => {
+    const { params } = compileWith(base, ['11', '202']);
+    expect(params.$filter).toBe("BusinessPartner eq '11' or BusinessPartner eq '202'");
+  });
+
+  it('ANDs the restriction with the question own filters', () => {
+    const { params } = compileWith(
+      { ...base, filters: [{ field: 'BusinessPartnerCategory', op: 'eq', value: '2' }] },
+      ['11'],
+    );
+    expect(params.$filter).toBe(
+      "(BusinessPartnerCategory eq '2') and (BusinessPartner eq '11')",
+    );
+  });
+
+  // A restriction narrows; it must never widen. With `or` logic the question's
+  // own clauses have to stay bracketed away from the id chain.
+  it('keeps the restriction ANDed even when the question uses or', () => {
+    const { params } = compileWith(
+      {
+        ...base,
+        filterLogic: 'or',
+        filters: [
+          { field: 'BusinessPartnerCategory', op: 'eq', value: '1' },
+          { field: 'BusinessPartnerCategory', op: 'eq', value: '2' },
+        ],
+      },
+      ['11'],
+    );
+    expect(params.$filter).toMatch(/^\(.*\) and \(BusinessPartner eq '11'\)$/);
+    expect(params.$filter).toContain(') or (');
+  });
+
+  it('escapes ids, so the boundary holds on this path too', () => {
+    const { params } = compileWith(base, ["O'X"]);
+    expect(params.$filter).toBe("BusinessPartner eq 'O''X'");
+  });
+
+  it('omits the restriction entirely when there are no ids', () => {
+    const { params } = compileWith(base, []);
+    expect(params.$filter).toBeUndefined();
+  });
+});

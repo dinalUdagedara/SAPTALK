@@ -28,6 +28,29 @@ export interface ColumnMeta {
  * `query` is always echoed back so the UI can show the user exactly what was
  * sent to SAP. That transparency is a product requirement, not a debug aid.
  */
+/**
+ * The first of two queries, when a question spanned two objects.
+ *
+ * Surfaced rather than hidden: the user is told a second request happened, what
+ * it asked, how many matches it found, and -- crucially -- whether that list was
+ * cut short.
+ */
+export interface RelatedStep {
+  entity: EntityName;
+  /** The URL of the first query, credential-free. */
+  query: string;
+  /** Distinct parents it matched. */
+  matched: number;
+  /**
+   * True when more matches existed than could be carried into the second query.
+   * The answer is then a subset, and the UI must say so.
+   */
+  truncated: boolean;
+  /** Requests the second phase needed; more than one means ids were chunked. */
+  requests: number;
+  durationMs: number;
+}
+
 export interface QueryEnvelope {
   /** Fully-resolved request URL sent to SAP, minus credentials. */
   query: string;
@@ -43,6 +66,8 @@ export interface QueryEnvelope {
   data: QueryRow[];
   /** Untouched upstream payload, for the transparency panel. */
   raw: unknown;
+  /** Present when the question spanned two objects. */
+  related?: RelatedStep;
 }
 
 export interface ApiErrorBody {

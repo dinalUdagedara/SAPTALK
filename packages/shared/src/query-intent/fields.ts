@@ -261,6 +261,39 @@ export const ENTITIES = {
 
 export type EntityName = keyof typeof ENTITIES;
 
+/**
+ * How entities join to one another.
+ *
+ * OData V2 cannot filter across a navigation property -- the sandbox answers
+ * `to_BusinessPartnerAddress/Country eq 'DE'` with "Left hand expression of
+ * memberaccess operator has wrong cardinality", and it has no `any()` lambda.
+ * So a question spanning two objects is answered as two queries joined on a
+ * shared key, and this map is what declares that key.
+ *
+ * Symmetric on purpose: either object can be the one you are asking about.
+ */
+export const RELATIONS: Record<string, Partial<Record<EntityName, { joinField: string }>>> = {
+  BusinessPartner: {
+    BusinessPartnerAddress: { joinField: 'BusinessPartner' },
+  },
+  BusinessPartnerAddress: {
+    BusinessPartner: { joinField: 'BusinessPartner' },
+  },
+};
+
+/** The join between two entities, or undefined when they are not related. */
+export function relationBetween(
+  entity: EntityName,
+  related: EntityName,
+): { joinField: string } | undefined {
+  return RELATIONS[entity]?.[related];
+}
+
+/** Entities that can be joined to this one. */
+export function relatedEntities(entity: EntityName): EntityName[] {
+  return Object.keys(RELATIONS[entity] ?? {}) as EntityName[];
+}
+
 export const ENTITY_NAMES = Object.keys(ENTITIES) as [EntityName, ...EntityName[]];
 
 export function getEntity(entity: EntityName) {

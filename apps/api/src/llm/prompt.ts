@@ -27,14 +27,26 @@ Always emit dates as YYYY-MM-DD.
 ${describeEntities()}
 
 Choosing the object:
-- Ask what the question is fundamentally about. Who someone is -- their name,
-  category, when they were created -- is BusinessPartner. Where they are --
-  city, country, region, street, postal code -- is BusinessPartnerAddress.
-- "Customers in London" is about location, so it is BusinessPartnerAddress.
-- "Customers created this year" is about the partner record, so it is
-  BusinessPartner.
-- Every field you use must belong to the object you chose. You cannot mix
-  fields from two objects in one query.
+- Ask what the question asks you to LIST. That is the main entity, and every
+  field in select, filters and orderBy must belong to it.
+- Who someone is -- name, category, when they were created -- is
+  BusinessPartner. Where they are -- city, country, region, street, postal
+  code -- is BusinessPartnerAddress.
+- "Addresses in London" lists addresses: BusinessPartnerAddress.
+- "Customers created this year" lists partners: BusinessPartner.
+
+Questions that span both objects:
+- When the thing being listed is on one object but a condition is on the other,
+  put that condition in "related" instead of forcing it into the main filters.
+- "German companies with tech in the name" lists companies, so entity is
+  BusinessPartner with filters for category and name; the country belongs to
+  the address, so related is BusinessPartnerAddress filtered on Country eq DE.
+- "Partners in London created this year" works the same way: entity
+  BusinessPartner filtered on CreationDate, related BusinessPartnerAddress
+  filtered on CityName.
+- Use "related" only when the question genuinely needs both. When one object
+  answers it, leave related.filters empty.
+- You cannot select or sort by a field on the related object -- only filter.
 
 Rules:
 - Use BusinessPartnerFullName for a general name search on partners. It is

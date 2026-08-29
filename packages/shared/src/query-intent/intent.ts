@@ -15,6 +15,8 @@ import {
   ENTITY_NAMES,
   getEntity,
   getField,
+  relatedEntities,
+  relationBetween,
   type EntityName,
   type FieldDef,
 } from './fields';
@@ -35,6 +37,24 @@ const filterSchema = z.object({
   value: z.string().min(1).max(100),
 });
 
+/**
+ * A condition on a *related* object.
+ *
+ * OData V2 cannot express this in one request, so it becomes a second query
+ * whose results narrow the first. Kept to filters only: selecting or sorting by
+ * a related field would imply a real join, which two requests cannot honestly
+ * provide.
+ */
+const relatedSchema = z.object({
+  entity: z.enum(ENTITY_NAMES),
+  /**
+   * Empty means unused. The model's schema requires this object on every
+   * response -- OpenAI strict mode has no optional properties -- so "no
+   * cross-object condition" must be expressible as a value, not an absence.
+   */
+  filters: z.array(filterSchema).max(MAX_FILTERS),
+});
+
 const orderBySchema = z.object({
   field: z.string().min(1),
   direction: z.enum(['asc', 'desc']).default('asc'),
@@ -52,11 +72,21 @@ export const queryIntentSchema = z.object({
   // `validateIntent`, so there is exactly one rule about row limits.
   top: z.number().int().positive().optional(),
   skip: z.number().int().min(0).max(10_000).optional(),
+  /** Conditions on a related object, answered as a second query. */
+  related: relatedSchema.optional(),
 });
 
 export type QueryIntent = z.input<typeof queryIntentSchema>;
 export type Filter = z.infer<typeof filterSchema>;
 export type OrderBy = z.infer<typeof orderBySchema>;
+
+/** A validated related-object constraint, with the key the two join on. */
+export interface ResolvedRelated {
+  entity: EntityName;
+  filters: Filter[];
+  /** Field present on both entities, carrying the same identifier. */
+  joinField: string;
+}
 
 /**
  * An intent with every optional field resolved, so the compiler is a total
@@ -70,6 +100,7 @@ export interface ResolvedQueryIntent {
   orderBy: OrderBy[];
   top: number;
   skip: number;
+  related?: ResolvedRelated;
 }
 
 export type ValidationResult =
@@ -132,6 +163,8 @@ export function validateIntent(input: unknown): ValidationResult {
     }
   }
 
+  const related = validateRelated(intent, errors);
+
   if (errors.length > 0) return { ok: false, errors };
 
   return {
@@ -146,8 +179,66 @@ export function validateIntent(input: unknown): ValidationResult {
       // request to answer partially, not a malformed one.
       top: Math.min(intent.top ?? DEFAULT_TOP, MAX_TOP),
       skip: intent.skip ?? 0,
+      ...(related ? { related } : {}),
     },
   };
+}
+
+/**
+ * Check a related-object constraint.
+ *
+ * The related entity must actually be related -- an arbitrary pair of entities
+ * has no key to join on, and inventing one would produce confident nonsense.
+ */
+function validateRelated(
+  intent: z.infer<typeof queryIntentSchema>,
+  errors: string[],
+): ResolvedRelated | undefined {
+  const related = intent.related;
+  if (!related || related.filters.length === 0) return undefined;
+
+  if (related.entity === intent.entity) {
+    errors.push(
+      `The related object must differ from "${intent.entity}". ` +
+        'Put conditions on the same object in the main filters.',
+    );
+    return undefined;
+  }
+
+  const relation = relationBetween(intent.entity, related.entity);
+  if (!relation) {
+    const options = relatedEntities(intent.entity);
+    errors.push(
+      `"${related.entity}" is not related to "${intent.entity}". ` +
+        (options.length
+          ? `Related objects: ${options.join(', ')}.`
+          : 'It has no related objects.'),
+    );
+    return undefined;
+  }
+
+  for (const filter of related.filters) {
+    const field = getField(related.entity, filter.field);
+    if (!field) {
+      errors.push(unknownFieldMessage(related.entity, filter.field, 'filtered on'));
+      continue;
+    }
+    if (!field.filterable) {
+      errors.push(`Field "${field.name}" cannot be filtered on.`);
+      continue;
+    }
+    if (!operatorAllowedFor(filter.op, field.type)) {
+      errors.push(
+        `Operator "${filter.op}" cannot be used on "${field.name}" (${field.type}). ` +
+          `Valid operators: ${operatorsFor(field.type).join(', ')}.`,
+      );
+      continue;
+    }
+    const valueError = checkValue(field, filter.value);
+    if (valueError) errors.push(valueError);
+  }
+
+  return { entity: related.entity, filters: related.filters, joinField: relation.joinField };
 }
 
 /** Values must match their field's type; enums must be one of the known values. */

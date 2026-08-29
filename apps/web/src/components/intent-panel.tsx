@@ -55,6 +55,26 @@ export function IntentPanel({ intent }: { intent: ResolvedQueryIntent }) {
         )}
       </Row>
 
+      {intent.related && (
+        <Row label="Related">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-primary">{intent.related.entity}</span>
+            {intent.related.filters.map((filter, index) => (
+              <div key={index} className="flex flex-wrap items-center gap-1.5">
+                <span className="text-foreground">{filter.field}</span>
+                <Badge
+                  variant="outline"
+                  className="h-5 rounded border-primary/30 bg-primary/10 px-1.5 font-mono text-[11px] font-normal text-primary"
+                >
+                  {filter.op}
+                </Badge>
+                <span className="text-accent-foreground">{filter.value}</span>
+              </div>
+            ))}
+          </div>
+        </Row>
+      )}
+
       <Row label="Sort">
         {intent.orderBy.length === 0 ? (
           <span className="text-muted-foreground">none</span>

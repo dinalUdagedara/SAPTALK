@@ -108,7 +108,12 @@ describe('the system prompt', () => {
 
   it('tells the model how to choose between the entities', () => {
     expect(prompt).toContain('BusinessPartnerAddress');
-    expect(prompt).toMatch(/cannot mix/i);
+    expect(prompt).toMatch(/what the question asks you to LIST/i);
+  });
+
+  it('teaches the cross-object case with a worked example', () => {
+    expect(prompt).toContain('German companies with tech in the name');
+    expect(prompt).toMatch(/related is BusinessPartnerAddress/i);
   });
 
   it('embeds the field documentation for both entities', () => {
