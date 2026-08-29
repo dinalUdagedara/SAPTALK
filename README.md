@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/dinalUdagedara/SAPTalk/actions/workflows/ci.yml/badge.svg)](https://github.com/dinalUdagedara/SAPTalk/actions/workflows/ci.yml)
 
-**Ask questions about SAP business data in plain English.**
+**[Live demo](https://saptalk-web.vercel.app)** · **Ask questions about SAP business data in plain English.**
 
 An LLM translates the question into a structured *query intent*. It never writes OData.
 Deterministic, testable code validates that intent against a field allowlist and compiles
@@ -182,6 +182,50 @@ curl -X POST localhost:3001/api/sap/query -H 'Content-Type: application/json' -d
   "top": 5
 }'
 ```
+
+---
+
+## Deployment
+
+Both apps run on Vercel's free Hobby tier as two projects from this one repository,
+each with a different **Root Directory**:
+
+| Project | Root Directory | URL |
+|---|---|---|
+| `saptalk-web` | `apps/web` | https://saptalk-web.vercel.app |
+| `saptalk-api` | `apps/api` | https://saptalk-api.vercel.app |
+
+Vercel deploys NestJS with zero configuration — `src/main.ts` is detected as the entrypoint
+and the app becomes a single Function. The `vercel.json` in each app builds the shared
+workspace package first, since both import `@saptalk/shared` from `dist`, which does not
+exist in a fresh checkout until `tsc` has run.
+
+### Environment variables
+
+Set on `saptalk-api`:
+
+| Variable | Purpose |
+|---|---|
+| `SAP_API_KEY` | Business Accelerator Hub sandbox key |
+| `OPENAI_API_KEY` | Model access |
+| `SAP_BP_BASE_URL` | Business Partner service root |
+| `CORS_ORIGIN` | Comma-separated list of allowed frontend origins |
+| `ASK_RATE_LIMIT_PER_HOUR` | Per-client hourly limit, default 10 |
+| `ASK_DAILY_CAP` | Global daily limit, default 200 |
+
+Set on `saptalk-web`: `NEXT_PUBLIC_API_URL` — the API's `/api` root. It is read at build
+time, so changing it needs a redeploy, not just a restart.
+
+### Protecting the key
+
+`POST /api/ask` calls a paid model on every request, and the deployment is public. Two
+limits apply: 10 questions per client per hour, and 200 per day overall. The per-client
+limit keeps one visitor from taking the demo; the daily cap protects the key behind it.
+
+Both count in process memory, so on a serverless host each instance keeps its own tally and
+a burst spread across instances can exceed the nominal limit. Treat them as a speed bump
+against casual abuse. **The real guarantee is a spend limit on the OpenAI account itself**,
+which is the one control nothing can route around.
 
 ---
 

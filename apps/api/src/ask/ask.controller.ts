@@ -1,5 +1,6 @@
-import { BadRequestException, Body, Controller, HttpCode, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import type { AskResponse } from '@saptalk/shared';
+import { AskThrottleGuard } from '../common/ask-throttle.guard';
 import { BusinessPartnerService } from '../sap/business-partner.service';
 import { IntentGeneratorService } from '../llm/intent-generator.service';
 
@@ -21,6 +22,7 @@ export class AskController {
    */
   @Post()
   @HttpCode(200)
+  @UseGuards(AskThrottleGuard)
   async ask(@Body() body: unknown): Promise<AskResponse> {
     const question = readQuestion(body);
     const generated = await this.intents.generate(question);

@@ -12,3 +12,7 @@ dist/
 
 # Office lock files, created while a document in docs/ is open
 ~$*
+
+# Vercel
+.vercel
+.env*
