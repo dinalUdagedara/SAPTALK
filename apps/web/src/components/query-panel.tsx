@@ -40,11 +40,22 @@ function shortenBase(base: string): string {
 }
 
 /**
+ * Values longer than this are collapsed by default.
+ *
+ * A join restricts by an or-chain of up to a hundred keys, which runs to
+ * thousands of characters and buries the condition the user actually asked
+ * about. Collapsing keeps the panel readable; the full text is one click away
+ * and the copy button always copies the real URL.
+ */
+const COLLAPSE_OVER = 240;
+
+/**
  * What our code built. The brightest element on the page, deliberately: the
  * whole product claim is that this is inspectable.
  */
 export function QueryPanel({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const { base, params } = splitQuery(url);
 
   async function copy() {
@@ -74,18 +85,40 @@ export function QueryPanel({ url }: { url: string }) {
         <pre className="whitespace-pre-wrap break-words font-mono text-[12.5px] leading-relaxed">
           <code>
             <span className="text-muted-foreground">{shortenBase(base)}</span>
-            {params.map(([key, value]) => (
-              <span key={key} className="block pl-4">
-                {/* The `?$key=` prefix must not break, or a long value pushes
-                    the `?` onto a line of its own. Only the value wraps. */}
-                <span className="whitespace-nowrap">
-                  <span className="text-muted-foreground">?</span>
-                  <span className="text-primary">{key}</span>
-                  <span className="text-muted-foreground">=</span>
+            {params.map(([key, value]) => {
+              const long = value.length > COLLAPSE_OVER;
+              const open = expanded[key] ?? false;
+              const shown = long && !open ? value.slice(0, COLLAPSE_OVER) : value;
+
+              return (
+                <span key={key} className="block pl-4">
+                  {/* The `?$key=` prefix must not break, or a long value pushes
+                      the `?` onto a line of its own. Only the value wraps. */}
+                  <span className="whitespace-nowrap">
+                    <span className="text-muted-foreground">?</span>
+                    <span className="text-primary">{key}</span>
+                    <span className="text-muted-foreground">=</span>
+                  </span>
+                  <span className="break-all text-foreground">{shown}</span>
+                  {long && (
+                    <>
+                      {!open && <span className="text-muted-foreground">…</span>}{' '}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpanded((current) => ({ ...current, [key]: !open }))
+                        }
+                        className="rounded text-[11px] text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                      >
+                        {open
+                          ? 'show less'
+                          : `show all ${value.length.toLocaleString()} characters`}
+                      </button>
+                    </>
+                  )}
                 </span>
-                <span className="break-all text-foreground">{value}</span>
-              </span>
-            ))}
+              );
+            })}
           </code>
         </pre>
       </div>

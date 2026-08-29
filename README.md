@@ -142,14 +142,33 @@ Available fields: BusinessPartner, BusinessPartnerFullName, BusinessPartnerCateg
 That message goes back to the model on retry. A second entity did not need a second
 safeguard; the existing one simply had more to do.
 
-### Known limitation: no joins
+### Questions that span both objects
 
-A question spanning both objects — *"German companies with tech in the name"* — cannot be
-expressed, because country lives on the address and name lives on the partner. The model
-picks one object and **silently answers the narrower question**. It does not invent a field
-and it does not produce an invalid query, but it also does not tell you it dropped half your
-question. Closing that properly needs `$expand` across the navigation property, which is a
-separate piece of work.
+*"German companies with tech in the name"* needs both: the name is on the partner, the
+country is on the address. OData V2 cannot express that in one request — filtering across a
+navigation property returns **"Left hand expression of memberaccess operator has wrong
+cardinality"**, and there is no `any()` lambda. Both were confirmed against the sandbox.
+
+So the model puts the second condition in a `related` block, and the query runs as two
+requests joined on the shared `BusinessPartner` key. **Both queries are shown**, because a
+join that happened silently would make the transparency claim false.
+
+**Which side runs first decides whether the answer is right.** Leading with the broad side
+is how these go wrong:
+
+| | German addresses | Tech organisations |
+|---|---|---|
+| Matches | 902 | 13 |
+
+Leading from the 902 means carrying an arbitrary subset into the second request — an
+or-chain caps at 100 keys, because 200 returns `414 URI Too Long` (measured). Leading from
+the 13 is exact. So the rule is: **when the question states its own conditions, they run
+first**; when it states none, the related condition is the only filter available and has to
+lead.
+
+When even that overflows, the result says so. A truncated answer is labelled *"These results
+are incomplete"* rather than presented as a complete one — the failure mode this whole
+feature exists to remove was answering a narrower question without admitting it.
 
 ---
 

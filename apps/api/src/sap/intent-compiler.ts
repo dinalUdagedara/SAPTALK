@@ -42,7 +42,15 @@ const COMPARISON: Partial<Record<Operator, string>> = {
   lte: 'le',
 };
 
-export function compileIntent(intent: ResolvedQueryIntent): CompiledQuery {
+/**
+ * @param restrictTo when a related query ran first, the parent ids it matched.
+ *        V2 has no `in` operator, so this becomes an or-chain on the join field
+ *        and is ANDed with whatever the question itself asked for.
+ */
+export function compileIntent(
+  intent: ResolvedQueryIntent,
+  restrictTo?: { field: string; values: string[] },
+): CompiledQuery {
   const entity = getEntity(intent.entity);
 
   const params: ODataParams = {
@@ -50,9 +58,17 @@ export function compileIntent(intent: ResolvedQueryIntent): CompiledQuery {
     $top: intent.top,
   };
 
-  if (intent.filters.length > 0) {
-    params.$filter = compileFilters(intent);
-  }
+  const own = intent.filters.length > 0 ? compileFilters(intent) : undefined;
+  const restriction =
+    restrictTo && restrictTo.values.length > 0
+      ? restrictTo.values.map((v) => `${restrictTo.field} eq ${quote(v)}`).join(' or ')
+      : undefined;
+
+  // The restriction narrows the question; it never widens it, so it is always
+  // ANDed even when the question's own filters are combined with `or`.
+  if (own && restriction) params.$filter = `(${own}) and (${restriction})`;
+  else if (own) params.$filter = own;
+  else if (restriction) params.$filter = restriction;
 
   if (intent.orderBy.length > 0) {
     params.$orderby = intent.orderBy

@@ -20,6 +20,7 @@ import {
   OPERATOR_NAMES,
   getEntity,
   operatorsFor,
+  relatedEntities,
   type EntityName,
   type FieldDef,
 } from '@saptalk/shared';
@@ -66,7 +67,7 @@ export function buildIntentJsonSchema(): JsonSchema {
   return {
     type: 'object',
     additionalProperties: false,
-    required: ['entity', 'select', 'filters', 'filterLogic', 'orderBy', 'top'],
+    required: ['entity', 'select', 'filters', 'filterLogic', 'orderBy', 'top', 'related'],
     properties: {
       entity: {
         type: 'string',
@@ -124,6 +125,36 @@ export function buildIntentJsonSchema(): JsonSchema {
         type: 'integer',
         description: `How many rows to return, 1 to ${MAX_TOP}. Use 25 unless the question asks for a specific number.`,
       },
+      related: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['entity', 'filters'],
+        description:
+          'Conditions on a DIFFERENT object, when the question spans two. ' +
+          'When the question concerns only one object, return an empty filters ' +
+          'array here; the entity value is then ignored.',
+        properties: {
+          entity: {
+            type: 'string',
+            enum: [...ENTITY_NAMES],
+            description: 'The other object. Must differ from the main entity.',
+          },
+          filters: {
+            type: 'array',
+            description: 'Conditions on that other object. Empty when unused.',
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['field', 'op', 'value'],
+              properties: {
+                field: { type: 'string', enum: allFieldNames((f) => f.filterable) },
+                op: { type: 'string', enum: [...OPERATOR_NAMES] },
+                value: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
     },
   };
 }
@@ -141,7 +172,11 @@ function describeEntity(entity: EntityName): string {
     if (!field.sortable) parts.push('Cannot be sorted.');
     return parts.join(' ');
   });
-  return [`${entity} -- ${def.description}`, ...lines].join('\n');
+  const related = relatedEntities(entity);
+  const joins = related.length
+    ? [`  Can be combined with: ${related.join(', ')}.`]
+    : [];
+  return [`${entity} -- ${def.description}`, ...lines, ...joins].join('\n');
 }
 
 /**

@@ -4,14 +4,14 @@ import { cn } from '@/lib/utils';
 
 /**
  * Questions chosen to show range, not just success: a date filter, a substring
- * match, two that route to the address object rather than the partner one, and
- * one the data genuinely cannot answer -- degrading honestly is part of what
- * this demonstrates.
+ * match, one that routes to the address object, one that spans both objects and
+ * needs a join, and one the data genuinely cannot answer -- degrading honestly
+ * is part of what this demonstrates.
  */
 const EXAMPLES = [
   'organisations added this year, newest first',
   'companies with tech in the name',
-  'partners with an address in London',
+  'partners in London created this year',
   'addresses in Germany, by postal code',
   'total revenue last quarter',
 ] as const;
