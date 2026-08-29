@@ -15,4 +15,8 @@ dist/
 
 # Vercel
 .vercel
-.env*
+
+# Env templates are committed on purpose -- the README tells you to copy them.
+# Do not broaden the .env rules above to `.env*`, which swallows these.
+!.env.example
+!**/*.env.local.example
