@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "comment": "Emit config. Tests import vitest, a devDependency, so they must not reach dist -- but they are still typechecked via tsconfig.json.",
+  "exclude": ["src/**/*.test.ts"]
+}

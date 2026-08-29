@@ -1,5 +1,7 @@
 # SAPTalk
 
+[![CI](https://github.com/dinalUdagedara/SAPTALK/actions/workflows/ci.yml/badge.svg)](https://github.com/dinalUdagedara/SAPTALK/actions/workflows/ci.yml)
+
 **Ask questions about SAP business data in plain English.**
 
 An LLM translates the question into a structured *query intent*. It never writes OData.
@@ -51,7 +53,7 @@ An intent looks like this:
     { "field": "BusinessPartnerCategory", "op": "eq",  "value": "2" },
     { "field": "CreationDate",            "op": "gte", "value": "2026-01-01" }
   ],
-  "orderBy": { "field": "CreationDate", "direction": "desc" },
+  "orderBy": [{ "field": "CreationDate", "direction": "desc" }],
   "top": 25
 }
 ```
@@ -60,15 +62,15 @@ An intent looks like this:
 
 ## Status
 
-Milestone 1 of 5. The pipe from browser to SAP and back is working and verified against the
-live sandbox; the LLM layer is not built yet.
+Milestone 3 of 5. Questions can be answered end to end from a structured intent, verified
+against the live sandbox. The LLM that will produce those intents is not wired up yet.
 
 | | Milestone | State |
 |---|---|---|
 | 1 | End-to-end pipe — button → API → SAP → table | ✅ Done |
-| 2 | Query intent schema (Zod) in `packages/shared` | Next |
-| 3 | Intent → OData compiler, unit tested | Planned |
-| 4 | LLM layer via structured outputs | Planned |
+| 2 | Query intent schema (Zod) in `packages/shared` | ✅ Done |
+| 3 | Intent → OData compiler, unit tested | ✅ Done |
+| 4 | LLM layer via structured outputs | Next |
 | 5 | Example questions, intent shown beside the query | Planned |
 
 The model layer is deliberately last. By the time the schema and compiler exist, it is the
@@ -111,7 +113,7 @@ Response unwrapping and EDM date parsing are handled in
 
 ## Getting started
 
-**Requires** Node 20+ and pnpm 10+. Node 24 is what this is developed against.
+**Requires** Node 22+ and pnpm 10+. CI runs the test suite on Node 22 and 24; 24 is what this is developed against.
 
 1. **Get a sandbox API key** — [api.sap.com](https://api.sap.com) → avatar → Settings →
    *Show API Key*. One key covers the whole Business Accelerator Hub sandbox.
@@ -142,14 +144,38 @@ Open <http://localhost:3000> and click **Fetch business partners**.
 > `Failed to resolve API Key variable request.header.apikey`. A 404 would mean the URL is
 > wrong instead; the base URL in `.env.example` is verified against the live sandbox.
 
+### Checks
+
+```bash
+pnpm test        # 52 tests, no API key or network needed
+pnpm typecheck
+pnpm build
+```
+
+The schema and compiler are pure, so the interesting half of the system is tested with no
+API key, no network and no model. CI runs all three on every pull request.
+
 ### API
 
 ```http
-GET /api/sap/business-partners?top=10
+GET  /api/sap/business-partners?top=10    # unfiltered first page
+POST /api/sap/query                       # run a query intent
 ```
 
-Returns a `QueryEnvelope`: the resolved SAP URL, upstream duration, normalised rows, and the
-untouched raw payload. `top` is clamped to 1–100 server-side.
+Both return a `QueryEnvelope`: the resolved SAP URL, upstream duration, normalised rows, and
+the untouched raw payload.
+
+`POST /api/sap/query` takes an intent, validates it against the field allowlist, compiles it
+to OData and runs it. A rejected intent returns 400 with the specific reasons.
+
+```bash
+curl -X POST localhost:3001/api/sap/query -H 'Content-Type: application/json' -d '{
+  "entity": "BusinessPartner",
+  "filters": [{ "field": "BusinessPartnerFullName", "op": "contains", "value": "Steel" }],
+  "orderBy": [{ "field": "CreationDate", "direction": "desc" }],
+  "top": 5
+}'
+```
 
 ---
 
@@ -164,13 +190,18 @@ apps/api/                        NestJS backend, port 3001
     sap.service.ts               transport: builds URLs, calls SAP, maps errors
     business-partner.service.ts  entity logic: projection + normalisation
     sap.controller.ts            HTTP surface
+    intent-compiler.ts           intent -> OData V2 params, a pure function
     odata-v2.ts                  V2 dialect helpers
 apps/web/                        Next.js frontend, port 3000
   src/app/page.tsx               button, query preview, table, raw panel
   src/lib/api.ts                 typed client
 packages/shared/                 types imported by both
   src/api.ts                     QueryEnvelope
-  src/business-partner.ts        entity shape + field allowlist
+  src/business-partner.ts        normalised row shape
+  src/query-intent/              the validation boundary
+    fields.ts                    the field allowlist
+    operators.ts                 operator vocabulary, dialect-independent
+    intent.ts                    Zod schema + registry cross-checks
 docs/
   SAPTalk-Explained.docx         concept explainer, no SAP background assumed
 ```
