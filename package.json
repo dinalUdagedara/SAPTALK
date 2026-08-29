@@ -1,0 +1,18 @@
+{
+  "name": "saptalk",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.30.2",
+  "scripts": {
+    "build:shared": "pnpm --filter @saptalk/shared build",
+    "dev": "pnpm build:shared && concurrently -n api,web -c cyan,magenta \"pnpm --filter @saptalk/api start:dev\" \"pnpm --filter @saptalk/web dev\"",
+    "dev:api": "pnpm build:shared && pnpm --filter @saptalk/api start:dev",
+    "dev:web": "pnpm build:shared && pnpm --filter @saptalk/web dev",
+    "build": "pnpm build:shared && pnpm --filter @saptalk/api build && pnpm --filter @saptalk/web build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}
